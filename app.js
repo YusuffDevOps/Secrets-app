@@ -48,18 +48,18 @@ const userSchema = new mongoose.Schema({
   password: String,
   googleId: String,
   facebookId: String,
-  secret: String
+  secret:String
 });
 
 //userSchema use passportLocalMongoose as a plugin
-userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(passportLocalMongoose, {usernameField:"email"});
 userSchema.plugin(findOrCreate);
 
 
 const User = mongoose.model("User", userSchema);
 
 
-passport.use(User.createStrategy()); //Create a configured strategy for passport
+// passport.use(User.createStrategy()); //Create a configured strategy for passport
 passport.serializeUser(function(user, done) {
   done(null, user.id);
 });
@@ -76,8 +76,11 @@ passport.use(new GoogleStrategy({
     callbackURL: "http://localhost:3000/auth/google/secrets"
   },
   function(accessToken, refreshToken, profile, cb) {
+    console.log(profile)
     User.findOrCreate({
-      googleId: profile.id
+      email:profile._json.email,
+      googleId: profile.id,
+      secret:""
     }, function(err, user) {
       return cb(err, user);
     });
@@ -153,8 +156,10 @@ app.get("/submit", function(req, res) {
 //Google Authentication route
 app.get("/auth/google",
   passport.authenticate("google", {
-    scope: ["profile"]
-  }));
+    scope: ["profile", "email"]
+  }), function(req, res){
+    console.log(req.body);
+  });
 
 //Facebook Authentication route
 app.get("/auth/facebook",
@@ -171,6 +176,7 @@ app.get("/auth/google/secrets",
   }),
   function(req, res) {
     // Successful authentication, redirect secrets.
+    console.log(req.user); //remember to call req.user
     res.redirect("/secrets");
   });
 
@@ -189,7 +195,8 @@ app.get("/auth/facebook/secrets",
 app.post("/register", function(req, res) {
   //register new user
   User.register({
-    username: req.body.username
+     email: req.body.username,
+    secret:req.body.secret,
   }, req.body.password, function(err, user) {
     if (err) {
       console.log(err);
@@ -207,13 +214,13 @@ app.post("/register", function(req, res) {
 app.post("/login", function(req, res) {
   //check the DB to see if the username that was used to login exists in the DB
   User.findOne({
-    username: req.body.username
+    email: req.body.username
   }, function(err, foundUser) {
     //if username is found in the database, create an object called "user" that will store the username and password
     //that was used to login
     if (foundUser) {
       const user = new User({
-        username: req.body.username,
+        email: req.body.username,
         password: req.body.password
       });
       //use the "user" object that was just created to check against the username and password in the database
